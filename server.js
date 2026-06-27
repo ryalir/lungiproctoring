@@ -72,15 +72,21 @@ app.get('/api/admin/devices', async (req, res) => {
 });
 
 
-// Endpoint 3: Fetch ONLY pending devices for your dashboard interface
+
+// Endpoint 3: Fetch ONLY pending devices (Returns deviceId and deviceModel)
 app.get('/api/admin/pending', async (req, res) => {
     try {
-        const pendingDevices = await Device.find({ isApproved: false }).sort({ createdAt: -1 });
+        // Find documents where isApproved is false
+        // select() keeps only deviceId and deviceModel, explicitly hiding internal fields
+        const pendingDevices = await Device.find({ isApproved: false })
+                                             .select('deviceId deviceModel createdAt')
+                                             .sort({ createdAt: -1 });
         res.json(pendingDevices);
     } catch (err) {
         res.status(500).json({ error: 'Failed to retrieve pending devices' });
     }
 });
+
 
 // ==========================================
 // TWO DISTINCT ENDPOINTS FOR YOUR BUTTONS
