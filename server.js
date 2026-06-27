@@ -50,11 +50,27 @@ app.post('/api/activate', async (req, res) => {
 app.get('/api/admin/devices', async (req, res) => {
     try {
         const devices = await Device.find().sort({ createdAt: -1 });
-        res.json(devices);
+        
+        // Map the results to return a friendly, readable date format
+        const formattedDevices = devices.map(device => ({
+            _id: device._id,
+            deviceId: device.deviceId,
+            deviceModel: device.deviceModel,
+            isApproved: device.isApproved,
+            // Formats to: "June 27, 2026" or your local equivalent
+            dateCreated: new Date(device.createdAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            })
+        }));
+
+        res.json(formattedDevices);
     } catch (err) {
         res.status(500).json({ error: 'Failed to retrieve devices' });
     }
 });
+
 
 // Endpoint 3: Fetch ONLY pending devices for your dashboard interface
 app.get('/api/admin/pending', async (req, res) => {
