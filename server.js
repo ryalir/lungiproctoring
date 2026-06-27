@@ -46,19 +46,21 @@ app.post('/api/activate', async (req, res) => {
     }
 });
 
-// Endpoint 2: Fetch all general devices (Sorted by newest additions first)
+
+// Endpoint 2: Fetch ONLY approved and active devices with clean metadata
 app.get('/api/admin/devices', async (req, res) => {
     try {
-        const devices = await Device.find().sort({ createdAt: -1 });
+        // 1. Filter for isApproved: true
+        // 2. Select only deviceId, deviceModel, and createdAt fields
+        const approvedDevices = await Device.find({ isApproved: true })
+                                            .select('deviceId deviceModel createdAt')
+                                            .sort({ createdAt: -1 });
         
-        // Map the results to return a friendly, readable date format
-        const formattedDevices = devices.map(device => ({
-            _id: device._id,
+        // 3. Map the data to format the date and return clean field names
+        const formattedDevices = approvedDevices.map(device => ({
             deviceId: device.deviceId,
-            deviceModel: device.deviceModel,
-            isApproved: device.isApproved,
-            // Formats to: "June 27, 2026" or your local equivalent
-            dateCreated: new Date(device.createdAt).toLocaleDateString('en-US', {
+            deviceName: device.deviceModel, // Maps deviceModel to deviceName as requested
+            createdDate: new Date(device.createdAt).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric'
@@ -67,9 +69,10 @@ app.get('/api/admin/devices', async (req, res) => {
 
         res.json(formattedDevices);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to retrieve devices' });
+        res.status(500).json({ error: 'Failed to retrieve approved devices' });
     }
 });
+
 
 
 
