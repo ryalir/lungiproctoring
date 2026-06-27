@@ -3,7 +3,12 @@ const mongoose = require('mongoose');
 const app = express();
 app.use(express.json());
 
-mongoose.connect(process.env.MONGO_URI);
+// 1. Force connection to 'lungi' database programmatically
+mongoose.connect(process.env.MONGO_URI, {
+    dbName: 'lungi'
+})
+.then(() => console.log('Successfully connected to the "lungi" database in MongoDB.'))
+.catch(err => console.error('MongoDB connection error:', err));
 
 const DeviceSchema = new mongoose.Schema({
     deviceId: { type: String, required: true, unique: true },
@@ -51,15 +56,19 @@ app.post('/api/admin/approve', async (req, res) => {
     }
 });
 
-// NEW ENDPOINT: Fetch all registered devices sorted by newest first
+// Endpoint 3: Fetch all registered devices sorted by newest first
 app.get('/api/admin/devices', async (req, res) => {
     try {
-        // Fetches all documents and sorts them by 'createdAt' in descending order (-1)
         const devices = await Device.find().sort({ createdAt: -1 });
         res.json(devices);
     } catch (err) {
         res.status(500).json({ error: 'Failed to retrieve devices from database' });
     }
+});
+
+// Friendly root URL message
+app.get('/', (req, res) => {
+    res.send('Device Activation Server is online and connected to lungi database!');
 });
 
 app.listen(process.env.PORT || 3000, () => console.log('Server running'));
