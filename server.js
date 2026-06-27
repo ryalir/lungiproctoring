@@ -5,18 +5,17 @@ app.use(express.json());
 
 mongoose.connect(process.env.MONGO_URI);
 
-// Added deviceModel and enabled automatic timestamps
 const DeviceSchema = new mongoose.Schema({
     deviceId: { type: String, required: true, unique: true },
     deviceModel: { type: String, default: "Unknown Device" }, 
     isApproved: { type: Boolean, default: false }
 }, { 
-    timestamps: true // Automatically injects and updates 'createdAt' and 'updatedAt'
+    timestamps: true 
 });
 
 const Device = mongoose.model('Device', DeviceSchema);
 
-// Updated Endpoint: Now parses and saves deviceModel
+// Endpoint 1: App checks or registers device
 app.post('/api/activate', async (req, res) => {
     const { deviceId, deviceModel } = req.body;
     if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
@@ -25,7 +24,6 @@ app.post('/api/activate', async (req, res) => {
         let device = await Device.findOne({ deviceId });
         
         if (!device) {
-            // Register new device with its hardware model details
             device = new Device({ deviceId, deviceModel });
             await device.save();
             return res.json({ status: "PENDING", message: "Device registered. Awaiting manual approval." });
@@ -41,7 +39,7 @@ app.post('/api/activate', async (req, res) => {
     }
 });
 
-// Admin approval route remains unchanged
+// Endpoint 2: Your private endpoint to manually approve a device
 app.post('/api/admin/approve', async (req, res) => {
     const { deviceId, approve } = req.body;
     try {
@@ -50,6 +48,17 @@ app.post('/api/admin/approve', async (req, res) => {
         res.json({ message: `Device approval status updated to: ${approve}` });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// NEW ENDPOINT: Fetch all registered devices sorted by newest first
+app.get('/api/admin/devices', async (req, res) => {
+    try {
+        // Fetches all documents and sorts them by 'createdAt' in descending order (-1)
+        const devices = await Device.find().sort({ createdAt: -1 });
+        res.json(devices);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to retrieve devices from database' });
     }
 });
 
