@@ -3,26 +3,30 @@ const mongoose = require('mongoose');
 const app = express();
 app.use(express.json());
 
-// Connect to MongoDB using your Render Environment Variable
 mongoose.connect(process.env.MONGO_URI);
 
+// Added deviceModel and enabled automatic timestamps
 const DeviceSchema = new mongoose.Schema({
     deviceId: { type: String, required: true, unique: true },
+    deviceModel: { type: String, default: "Unknown Device" }, 
     isApproved: { type: Boolean, default: false }
+}, { 
+    timestamps: true // Automatically injects and updates 'createdAt' and 'updatedAt'
 });
+
 const Device = mongoose.model('Device', DeviceSchema);
 
-// Endpoint 1: App checks or registers device
+// Updated Endpoint: Now parses and saves deviceModel
 app.post('/api/activate', async (req, res) => {
-    const { deviceId } = req.body;
+    const { deviceId, deviceModel } = req.body;
     if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
 
     try {
         let device = await Device.findOne({ deviceId });
         
         if (!device) {
-            // Register new device, defaults to unapproved (false)
-            device = new Device({ deviceId });
+            // Register new device with its hardware model details
+            device = new Device({ deviceId, deviceModel });
             await device.save();
             return res.json({ status: "PENDING", message: "Device registered. Awaiting manual approval." });
         }
@@ -37,10 +41,9 @@ app.post('/api/activate', async (req, res) => {
     }
 });
 
-// Endpoint 2: Your private endpoint to manually approve a device
-// Secure this with an API key header in production
+// Admin approval route remains unchanged
 app.post('/api/admin/approve', async (req, res) => {
-    const { deviceId, approve } = req.body; // approve is boolean
+    const { deviceId, approve } = req.body;
     try {
         const device = await Device.findOneAndUpdate({ deviceId }, { isApproved: approve }, { new: true });
         if (!device) return res.status(404).json({ error: 'Device not found' });
