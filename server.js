@@ -1,6 +1,9 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const cors = require('cors'); 
 const app = express();
+
+app.use(cors()); 
 app.use(express.json());
 
 // 1. Force explicit connection to the "lungi" database
@@ -16,22 +19,34 @@ const DeviceSchema = new mongoose.Schema({
     deviceModel: { type: String, default: "Unknown Device" }, 
     isApproved: { type: Boolean, default: false }
 }, { 
-    timestamps: true // Automatically generates and manages createdAt and updatedAt fields
+    timestamps: true 
 });
 
 const Device = mongoose.model('Device', DeviceSchema);
 
-// Endpoint 1: App Registration (Used by the Android client to verify access)
+// Endpoint 1: App Registration (CORRECTED to handle Android Array format and deviceName mapping)
 app.post('/api/activate', async (req, res) => {
-    const { deviceId, deviceModel } = req.body;
-    if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
-
     try {
+        let requestData = req.body;
+
+        // If the Android client wrapped the payload inside an array: [...]
+        if (Array.isArray(requestData)) {
+            requestData = requestData[0]; 
+        }
+
+        // Destructure deviceName directly from the payload sent by your app
+        const { deviceId, deviceName } = requestData;
+        
+        if (!deviceId) return res.status(400).json({ error: 'Device ID required' });
+
         let device = await Device.findOne({ deviceId });
         
         if (!device) {
-            // First time seeing this phone; register it with details as pending
-            device = new Device({ deviceId, deviceModel });
+            // Register it using deviceName mapped straight into your schema's deviceModel field
+            device = new Device({ 
+                deviceId: deviceId, 
+                deviceModel: deviceName || "Unknown Device" 
+            });
             await device.save();
             return res.json({ status: "PENDING", message: "Device registered. Awaiting manual approval." });
         }
@@ -42,24 +57,21 @@ app.post('/api/activate', async (req, res) => {
             return res.json({ status: "PENDING", message: "Device is still awaiting approval." });
         }
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Database error' });
     }
 });
 
-
 // Endpoint 2: Fetch ONLY approved and active devices with clean metadata
 app.get('/api/admin/devices', async (req, res) => {
     try {
-        // 1. Filter for isApproved: true
-        // 2. Select only deviceId, deviceModel, and createdAt fields
         const approvedDevices = await Device.find({ isApproved: true })
                                             .select('deviceId deviceModel createdAt')
                                             .sort({ createdAt: -1 });
         
-        // 3. Map the data to format the date and return clean field names
         const formattedDevices = approvedDevices.map(device => ({
             deviceId: device.deviceId,
-            deviceName: device.deviceModel, // Maps deviceModel to deviceName as requested
+            deviceName: device.deviceModel, 
             createdDate: new Date(device.createdAt).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
@@ -73,14 +85,9 @@ app.get('/api/admin/devices', async (req, res) => {
     }
 });
 
-
-
-
 // Endpoint 3: Fetch ONLY pending devices (Returns deviceId and deviceModel)
 app.get('/api/admin/pending', async (req, res) => {
     try {
-        // Find documents where isApproved is false
-        // select() keeps only deviceId and deviceModel, explicitly hiding internal fields
         const pendingDevices = await Device.find({ isApproved: false })
                                              .select('deviceId deviceModel createdAt')
                                              .sort({ createdAt: -1 });
@@ -89,11 +96,6 @@ app.get('/api/admin/pending', async (req, res) => {
         res.status(500).json({ error: 'Failed to retrieve pending devices' });
     }
 });
-
-
-// ==========================================
-// TWO DISTINCT ENDPOINTS FOR YOUR BUTTONS
-// ==========================================
 
 // Endpoint 4: LINKED TO APPROVE BUTTON
 app.post('/api/admin/device/approve', async (req, res) => {
@@ -115,7 +117,6 @@ app.post('/api/admin/device/reject', async (req, res) => {
     if (!deviceId) return res.status(400).json({ error: 'Missing deviceId parameter' });
 
     try {
-        // Drops the unapproved registration out of the system entirely
         const device = await Device.findOneAndDelete({ deviceId });
         if (!device) return res.status(404).json({ error: 'Device not found' });
         return res.json({ status: "SUCCESS", message: "Device rejected and removed." });
